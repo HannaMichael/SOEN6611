@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MiniBatchKMeansClusterer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons Math</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.math4.ml.clustering</a> &gt; <span class="el_source">MiniBatchKMeansClusterer.java</span></div><h1>MiniBatchKMeansClusterer.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.math4.ml.clustering;
+
+import org.apache.commons.math4.exception.NumberIsTooSmallException;
+import org.apache.commons.math4.ml.distance.DistanceMeasure;
+import org.apache.commons.math4.util.MathUtils;
+import org.apache.commons.math4.util.Pair;
+import org.apache.commons.rng.UniformRandomProvider;
+import org.apache.commons.rng.sampling.ListSampler;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+/**
+ * Clustering algorithm &lt;a href=&quot;https://www.eecs.tufts.edu/~dsculley/papers/fastkmeans.pdf&quot;&gt;
+ * based on KMeans&lt;/a&gt;.
+ *
+ * @param &lt;T&gt; Type of the points to cluster.
+ */
+public class MiniBatchKMeansClusterer&lt;T extends Clusterable&gt;
+    extends KMeansPlusPlusClusterer&lt;T&gt; {
+    /** Batch data size in iteration. */
+    private final int batchSize;
+    /** Iteration count of initialize the centers. */
+    private final int initIterations;
+    /** Data size of batch to initialize the centers. */
+    private final int initBatchSize;
+    /** Maximum number of iterations during which no improvement is occuring. */
+    private final int maxNoImprovementTimes;
+
+
+    /**
+     * Build a clusterer.
+     *
+     * @param k Number of clusters to split the data into.
+     * @param maxIterations Maximum number of iterations to run the algorithm for all the points,
+     * The actual number of iterationswill be smaller than {@code maxIterations * size / batchSize},
+     * where {@code size} is the number of points to cluster.
+     * Disabled if negative.
+     * @param batchSize Batch size for training iterations.
+     * @param initIterations Number of iterations allowed in order to find out the best initial centers.
+     * @param initBatchSize Batch size for initializing the clusters centers.
+     * A value of {@code 3 * batchSize} should be suitable in most cases.
+     * @param maxNoImprovementTimes Maximum number of iterations during which no improvement is occuring.
+     * A value of 10 is suitable in most cases.
+     * @param measure Distance measure.
+     * @param random Random generator.
+     * @param emptyStrategy Strategy for handling empty clusters that may appear during algorithm iterations.
+     */
+    public MiniBatchKMeansClusterer(final int k,
+                                    final int maxIterations,
+                                    final int batchSize,
+                                    final int initIterations,
+                                    final int initBatchSize,
+                                    final int maxNoImprovementTimes,
+                                    final DistanceMeasure measure,
+                                    final UniformRandomProvider random,
+                                    final EmptyClusterStrategy emptyStrategy) {
+<span class="fc" id="L76">        super(k, maxIterations, measure, random, emptyStrategy);</span>
+
+<span class="fc bfc" id="L78" title="All 2 branches covered.">        if (batchSize &lt; 1) {</span>
+<span class="fc" id="L79">            throw new NumberIsTooSmallException(batchSize, 1, true);</span>
+        }
+<span class="fc bfc" id="L81" title="All 2 branches covered.">        if (initIterations &lt; 1) {</span>
+<span class="fc" id="L82">            throw new NumberIsTooSmallException(initIterations, 1, true);</span>
+        }
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        if (initBatchSize &lt; 1) {</span>
+<span class="fc" id="L85">            throw new NumberIsTooSmallException(initBatchSize, 1, true);</span>
+        }
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        if (maxNoImprovementTimes &lt; 1) {</span>
+<span class="fc" id="L88">            throw new NumberIsTooSmallException(maxNoImprovementTimes, 1, true);</span>
+        }
+
+<span class="fc" id="L91">        this.batchSize = batchSize;</span>
+<span class="fc" id="L92">        this.initIterations = initIterations;</span>
+<span class="fc" id="L93">        this.initBatchSize = initBatchSize;</span>
+<span class="fc" id="L94">        this.maxNoImprovementTimes = maxNoImprovementTimes;</span>
+<span class="fc" id="L95">    }</span>
+
+    /**
+     * Runs the MiniBatch K-means clustering algorithm.
+     *
+     * @param points Points to cluster (cannot be {@code null}).
+     * @return the clusters.
+     * @throws org.apache.commons.math4.exception.MathIllegalArgumentException
+     * if the number of points is smaller than the number of clusters.
+     */
+    @Override
+    public List&lt;CentroidCluster&lt;T&gt;&gt; cluster(final Collection&lt;T&gt; points) {
+        // Sanity check.
+<span class="fc" id="L108">        MathUtils.checkNotNull(points);</span>
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        if (points.size() &lt; getNumberOfClusters()) {</span>
+<span class="nc" id="L110">            throw new NumberIsTooSmallException(points.size(), getNumberOfClusters(), false);</span>
+        }
+
+<span class="fc" id="L113">        final int pointSize = points.size();</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">        final int batchCount = pointSize / batchSize + (pointSize % batchSize &gt; 0 ? 1 : 0);</span>
+<span class="pc bpc" id="L115" title="1 of 2 branches missed.">        final int max = getMaxIterations() &lt; 0 ?</span>
+<span class="fc" id="L116">            Integer.MAX_VALUE :</span>
+<span class="pc" id="L117">            getMaxIterations() * batchCount;</span>
+
+<span class="fc" id="L119">        final List&lt;T&gt; pointList = new ArrayList&lt;&gt;(points);</span>
+<span class="fc" id="L120">        List&lt;CentroidCluster&lt;T&gt;&gt; clusters = initialCenters(pointList);</span>
+
+<span class="fc" id="L122">        final ImprovementEvaluator evaluator = new ImprovementEvaluator(batchSize,</span>
+                                                                        maxNoImprovementTimes);
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">        for (int i = 0; i &lt; max; i++) {</span>
+<span class="fc" id="L125">            clearClustersPoints(clusters);</span>
+<span class="fc" id="L126">            final List&lt;T&gt; batchPoints = ListSampler.sample(getRandomGenerator(), pointList, batchSize);</span>
+            // Training step.
+<span class="fc" id="L128">            final Pair&lt;Double, List&lt;CentroidCluster&lt;T&gt;&gt;&gt; pair = step(batchPoints, clusters);</span>
+<span class="fc" id="L129">            final double squareDistance = pair.getFirst();</span>
+<span class="fc" id="L130">            clusters = pair.getSecond();</span>
+            // Check whether the training can finished early.
+<span class="fc bfc" id="L132" title="All 2 branches covered.">            if (evaluator.converge(squareDistance, pointSize)) {</span>
+<span class="fc" id="L133">                break;</span>
+            }
+        }
+
+        // Add every mini batch points to their nearest cluster.
+<span class="fc" id="L138">        clearClustersPoints(clusters);</span>
+<span class="fc bfc" id="L139" title="All 2 branches covered.">        for (final T point : points) {</span>
+<span class="fc" id="L140">            addToNearestCentroidCluster(point, clusters);</span>
+<span class="fc" id="L141">        }</span>
+
+<span class="fc" id="L143">        return clusters;</span>
+    }
+
+    /**
+     * Helper method.
+     *
+     * @param clusters Clusters to clear.
+     */
+    private void clearClustersPoints(final List&lt;CentroidCluster&lt;T&gt;&gt; clusters) {
+<span class="fc bfc" id="L152" title="All 2 branches covered.">        for (CentroidCluster&lt;T&gt; cluster : clusters) {</span>
+<span class="fc" id="L153">            cluster.getPoints().clear();</span>
+<span class="fc" id="L154">        }</span>
+<span class="fc" id="L155">    }</span>
+
+    /**
+     * Mini batch iteration step.
+     *
+     * @param batchPoints Points selected for this batch.
+     * @param clusters Centers of the clusters.
+     * @return the squared distance of all the batch points to the nearest center.
+     */
+    private Pair&lt;Double, List&lt;CentroidCluster&lt;T&gt;&gt;&gt; step(final List&lt;T&gt; batchPoints,
+                                                        final List&lt;CentroidCluster&lt;T&gt;&gt; clusters) {
+        // Add every mini batch points to their nearest cluster.
+<span class="fc bfc" id="L167" title="All 2 branches covered.">        for (final T point : batchPoints) {</span>
+<span class="fc" id="L168">            addToNearestCentroidCluster(point, clusters);</span>
+<span class="fc" id="L169">        }</span>
+<span class="fc" id="L170">        final List&lt;CentroidCluster&lt;T&gt;&gt; newClusters = adjustClustersCenters(clusters);</span>
+        // Add every mini batch points to their nearest cluster again.
+<span class="fc" id="L172">        double squareDistance = 0.0;</span>
+<span class="fc bfc" id="L173" title="All 2 branches covered.">        for (T point : batchPoints) {</span>
+<span class="fc" id="L174">            final double d = addToNearestCentroidCluster(point, newClusters);</span>
+<span class="fc" id="L175">            squareDistance += d * d;</span>
+<span class="fc" id="L176">        }</span>
+
+<span class="fc" id="L178">        return new Pair&lt;&gt;(squareDistance, newClusters);</span>
+    }
+
+    /**
+     * Initializes the clusters centers.
+     *
+     * @param points Points used to initialize the centers.
+     * @return clusters with their center initialized.
+     */
+    private List&lt;CentroidCluster&lt;T&gt;&gt; initialCenters(final List&lt;T&gt; points) {
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">        final List&lt;T&gt; validPoints = initBatchSize &lt; points.size() ?</span>
+<span class="fc" id="L189">            ListSampler.sample(getRandomGenerator(), points, initBatchSize) :</span>
+<span class="pc" id="L190">            new ArrayList&lt;&gt;(points);</span>
+<span class="fc" id="L191">        double nearestSquareDistance = Double.POSITIVE_INFINITY;</span>
+<span class="fc" id="L192">        List&lt;CentroidCluster&lt;T&gt;&gt; bestCenters = null;</span>
+
+<span class="fc bfc" id="L194" title="All 2 branches covered.">        for (int i = 0; i &lt; initIterations; i++) {</span>
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">            final List&lt;T&gt; initialPoints = (initBatchSize &lt; points.size()) ?</span>
+<span class="fc" id="L196">                ListSampler.sample(getRandomGenerator(), points, initBatchSize) :</span>
+<span class="pc" id="L197">                new ArrayList&lt;&gt;(points);</span>
+<span class="fc" id="L198">            final List&lt;CentroidCluster&lt;T&gt;&gt; clusters = chooseInitialCenters(initialPoints);</span>
+<span class="fc" id="L199">            final Pair&lt;Double, List&lt;CentroidCluster&lt;T&gt;&gt;&gt; pair = step(validPoints, clusters);</span>
+<span class="fc" id="L200">            final double squareDistance = pair.getFirst();</span>
+<span class="fc" id="L201">            final List&lt;CentroidCluster&lt;T&gt;&gt; newClusters = pair.getSecond();</span>
+            //Find out a best centers that has the nearest total square distance.
+<span class="fc bfc" id="L203" title="All 2 branches covered.">            if (squareDistance &lt; nearestSquareDistance) {</span>
+<span class="fc" id="L204">                nearestSquareDistance = squareDistance;</span>
+<span class="fc" id="L205">                bestCenters = newClusters;</span>
+            }
+        }
+<span class="fc" id="L208">        return bestCenters;</span>
+    }
+
+    /**
+     * Adds a point to the cluster whose center is closest.
+     *
+     * @param point Point to add.
+     * @param clusters Clusters.
+     * @return the distance between point and the closest center.
+     */
+    private double addToNearestCentroidCluster(final T point,
+                                               final List&lt;CentroidCluster&lt;T&gt;&gt; clusters) {
+<span class="fc" id="L220">        double minDistance = Double.POSITIVE_INFINITY;</span>
+<span class="fc" id="L221">        CentroidCluster&lt;T&gt; closestCentroidCluster = null;</span>
+
+        // Find cluster closest to the point.
+<span class="fc bfc" id="L224" title="All 2 branches covered.">        for (CentroidCluster&lt;T&gt; centroidCluster : clusters) {</span>
+<span class="fc" id="L225">            final double distance = distance(point, centroidCluster.getCenter());</span>
+<span class="fc bfc" id="L226" title="All 2 branches covered.">            if (distance &lt; minDistance) {</span>
+<span class="fc" id="L227">                minDistance = distance;</span>
+<span class="fc" id="L228">                closestCentroidCluster = centroidCluster;</span>
+            }
+<span class="fc" id="L230">        }</span>
+<span class="fc" id="L231">        MathUtils.checkNotNull(closestCentroidCluster);</span>
+<span class="fc" id="L232">        closestCentroidCluster.addPoint(point);</span>
+
+<span class="fc" id="L234">        return minDistance;</span>
+    }
+
+    /**
+     * Stopping criterion.
+     * The evaluator checks whether improvement occurred during the
+     * {@link #maxNoImprovementTimes allowed number of successive iterations}.
+     */
+    private static class ImprovementEvaluator {
+        /** Batch size. */
+        private final int batchSize;
+        /** Maximum number of iterations during which no improvement is occuring. */
+        private final int maxNoImprovementTimes;
+        /**
+         * &lt;a href=&quot;https://en.wikipedia.org/wiki/Moving_average&quot;&gt;
+         * Exponentially Weighted Average&lt;/a&gt; of the squared
+         * diff to monitor the convergence while discarding
+         * minibatch-local stochastic variability.
+         */
+<span class="fc" id="L253">        private double ewaInertia = Double.NaN;</span>
+        /** Minimum value of {@link #ewaInertia} during iteration. */
+<span class="fc" id="L255">        private double ewaInertiaMin = Double.POSITIVE_INFINITY;</span>
+        /** Number of iteration during which {@link #ewaInertia} did not improve. */
+<span class="fc" id="L257">        private int noImprovementTimes = 0;</span>
+
+        /**
+         * @param batchSize Number of elements for each batch iteration.
+         * @param maxNoImprovementTimes Maximum number of iterations during
+         * which no improvement is occuring.
+         */
+        private ImprovementEvaluator(int batchSize,
+<span class="fc" id="L265">                                     int maxNoImprovementTimes) {</span>
+<span class="fc" id="L266">            this.batchSize = batchSize;</span>
+<span class="fc" id="L267">            this.maxNoImprovementTimes = maxNoImprovementTimes;</span>
+<span class="fc" id="L268">        }</span>
+
+        /**
+         * Stopping criterion.
+         *
+         * @param squareDistance Total square distance from the batch points
+         * to their nearest center.
+         * @param pointSize Number of data points.
+         * @return {@code true} if no improvement was made after the allowed
+         * number of iterations, {@code false} otherwise.
+         */
+        public boolean converge(final double squareDistance,
+                                final int pointSize) {
+<span class="fc" id="L281">            final double batchInertia = squareDistance / batchSize;</span>
+<span class="fc bfc" id="L282" title="All 2 branches covered.">            if (Double.isNaN(ewaInertia)) {</span>
+<span class="fc" id="L283">                ewaInertia = batchInertia;</span>
+            } else {
+<span class="fc" id="L285">                final double alpha = Math.min(batchSize * 2 / (pointSize + 1), 1);</span>
+<span class="fc" id="L286">                ewaInertia = ewaInertia * (1 - alpha) + batchInertia * alpha;</span>
+            }
+
+<span class="fc bfc" id="L289" title="All 2 branches covered.">            if (ewaInertia &lt; ewaInertiaMin) {</span>
+                // Improved.
+<span class="fc" id="L291">                noImprovementTimes = 0;</span>
+<span class="fc" id="L292">                ewaInertiaMin = ewaInertia;</span>
+            } else {
+                // No improvement.
+<span class="fc" id="L295">                ++noImprovementTimes;</span>
+            }
+
+<span class="fc bfc" id="L298" title="All 2 branches covered.">            return noImprovementTimes &gt;= maxNoImprovementTimes;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

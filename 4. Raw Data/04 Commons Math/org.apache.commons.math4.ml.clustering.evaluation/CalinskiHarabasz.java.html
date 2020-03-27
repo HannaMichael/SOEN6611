@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CalinskiHarabasz.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons Math</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.math4.ml.clustering.evaluation</a> &gt; <span class="el_source">CalinskiHarabasz.java</span></div><h1>CalinskiHarabasz.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.math4.ml.clustering.evaluation;
+
+import org.apache.commons.math4.exception.InsufficientDataException;
+import org.apache.commons.math4.ml.clustering.Cluster;
+import org.apache.commons.math4.ml.clustering.ClusterEvaluator;
+import org.apache.commons.math4.ml.clustering.Clusterable;
+import org.apache.commons.math4.util.MathArrays;
+
+import java.util.Collection;
+import java.util.List;
+
+/**
+ * Compute the Calinski and Harabasz score.
+ * &lt;p&gt;
+ * It is also known as the Variance Ratio Criterion.
+ * &lt;p&gt;
+ * The score is defined as ratio between the within-cluster dispersion and
+ * the between-cluster dispersion.
+ *
+ * @see &lt;a href=&quot;https://www.tandfonline.com/doi/abs/10.1080/03610927408827101&quot;&gt;A dendrite method for cluster
+ * analysis&lt;/a&gt;
+ */
+<span class="fc" id="L40">public class CalinskiHarabasz implements ClusterEvaluator {</span>
+    /** {@inheritDoc} */
+    @Override
+    public double score(List&lt;? extends Cluster&lt;? extends Clusterable&gt;&gt; clusters) {
+<span class="fc" id="L44">        final int dimension = dimensionOfClusters(clusters);</span>
+<span class="fc" id="L45">        final double[] centroid = meanOfClusters(clusters, dimension);</span>
+
+<span class="fc" id="L47">        double intraDistanceProduct = 0.0;</span>
+<span class="fc" id="L48">        double extraDistanceProduct = 0.0;</span>
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        for (Cluster&lt;? extends Clusterable&gt; cluster : clusters) {</span>
+            // Calculate the center of the cluster.
+<span class="fc" id="L51">            double[] clusterCentroid = mean(cluster.getPoints(), dimension);</span>
+<span class="fc bfc" id="L52" title="All 2 branches covered.">            for (Clusterable p : cluster.getPoints()) {</span>
+                // Increase the intra distance sum
+<span class="fc" id="L54">                intraDistanceProduct += covariance(clusterCentroid, p.getPoint());</span>
+<span class="fc" id="L55">            }</span>
+            // Increase the extra distance sum
+<span class="fc" id="L57">            extraDistanceProduct += cluster.getPoints().size() * covariance(centroid, clusterCentroid);</span>
+<span class="fc" id="L58">        }</span>
+
+<span class="fc" id="L60">        final int pointCount = countAllPoints(clusters);</span>
+<span class="fc" id="L61">        final int clusterCount = clusters.size();</span>
+        // Return the ratio of the intraDistranceProduct to extraDistanceProduct
+<span class="pc bpc" id="L63" title="1 of 2 branches missed.">        return intraDistanceProduct == 0.0 ? 1.0 :</span>
+<span class="fc" id="L64">                (extraDistanceProduct * (pointCount - clusterCount) /</span>
+                        (intraDistanceProduct * (clusterCount - 1)));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isBetterScore(double a,
+                                 double b) {
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        return a &gt; b;</span>
+    }
+
+    /**
+     * Calculate covariance of two double array.
+     * &lt;pre&gt;
+     *   covariance = sum((p1[i]-p2[i])^2)
+     * &lt;/pre&gt;
+     *
+     * @param p1 Double array
+     * @param p2 Double array
+     * @return covariance of two double array
+     */
+    private double covariance(double[] p1, double[] p2) {
+<span class="fc" id="L86">        MathArrays.checkEqualLength(p1, p2);</span>
+<span class="fc" id="L87">        double sum = 0;</span>
+<span class="fc bfc" id="L88" title="All 2 branches covered.">        for (int i = 0; i &lt; p1.length; i++) {</span>
+<span class="fc" id="L89">            final double dp = p1[i] - p2[i];</span>
+<span class="fc" id="L90">            sum += dp * dp;</span>
+        }
+<span class="fc" id="L92">        return sum;</span>
+    }
+
+    /**
+     * Calculate the mean of all the points.
+     *
+     * @param points    A collection of points
+     * @param dimension The dimension of each point
+     * @return The mean value.
+     */
+    private double[] mean(final Collection&lt;? extends Clusterable&gt; points, final int dimension) {
+<span class="fc" id="L103">        final double[] centroid = new double[dimension];</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        for (final Clusterable p : points) {</span>
+<span class="fc" id="L105">            final double[] point = p.getPoint();</span>
+<span class="fc bfc" id="L106" title="All 2 branches covered.">            for (int i = 0; i &lt; centroid.length; i++) {</span>
+<span class="fc" id="L107">                centroid[i] += point[i];</span>
+            }
+<span class="fc" id="L109">        }</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        for (int i = 0; i &lt; centroid.length; i++) {</span>
+<span class="fc" id="L111">            centroid[i] /= points.size();</span>
+        }
+<span class="fc" id="L113">        return centroid;</span>
+    }
+
+    /**
+     * Calculate the mean of all the points in the clusters.
+     *
+     * @param clusters  A collection of clusters.
+     * @param dimension The dimension of each point.
+     * @return The mean value.
+     */
+    private double[] meanOfClusters(final Collection&lt;? extends Cluster&lt;? extends Clusterable&gt;&gt; clusters, final int dimension) {
+<span class="fc" id="L124">        final double[] centroid = new double[dimension];</span>
+<span class="fc" id="L125">        int allPointsCount = 0;</span>
+<span class="fc bfc" id="L126" title="All 2 branches covered.">        for (Cluster&lt;? extends Clusterable&gt; cluster : clusters) {</span>
+<span class="fc bfc" id="L127" title="All 2 branches covered.">            for (Clusterable p : cluster.getPoints()) {</span>
+<span class="fc" id="L128">                double[] point = p.getPoint();</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">                for (int i = 0; i &lt; centroid.length; i++) {</span>
+<span class="fc" id="L130">                    centroid[i] += point[i];</span>
+                }
+<span class="fc" id="L132">                allPointsCount++;</span>
+<span class="fc" id="L133">            }</span>
+<span class="fc" id="L134">        }</span>
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        for (int i = 0; i &lt; centroid.length; i++) {</span>
+<span class="fc" id="L136">            centroid[i] /= allPointsCount;</span>
+        }
+<span class="fc" id="L138">        return centroid;</span>
+    }
+
+    /**
+     * Count all the points in collection of cluster.
+     *
+     * @param clusters collection of cluster
+     * @return points count
+     */
+    private int countAllPoints(final Collection&lt;? extends Cluster&lt;? extends Clusterable&gt;&gt; clusters) {
+<span class="fc" id="L148">        int pointCount = 0;</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">        for (Cluster&lt;? extends Clusterable&gt; cluster : clusters) {</span>
+<span class="fc" id="L150">            pointCount += cluster.getPoints().size();</span>
+<span class="fc" id="L151">        }</span>
+<span class="fc" id="L152">        return pointCount;</span>
+    }
+
+    /**
+     * Detect the dimension of points in the clusters
+     *
+     * @param clusters collection of cluster
+     * @return The dimension of the first point in clusters
+     */
+    private int dimensionOfClusters(final Collection&lt;? extends Cluster&lt;? extends Clusterable&gt;&gt; clusters) {
+        // Iteration and find out the first point.
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">        for (Cluster&lt;? extends Clusterable&gt; cluster : clusters) {</span>
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">            for (Clusterable p : cluster.getPoints()) {</span>
+<span class="fc" id="L165">                return p.getPoint().length;</span>
+            }
+<span class="nc" id="L167">        }</span>
+        // Throw exception if there is no point.
+<span class="nc" id="L169">        throw new InsufficientDataException();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>

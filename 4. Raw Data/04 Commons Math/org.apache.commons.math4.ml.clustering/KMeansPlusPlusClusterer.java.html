@@ -1,0 +1,544 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>KMeansPlusPlusClusterer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons Math</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.math4.ml.clustering</a> &gt; <span class="el_source">KMeansPlusPlusClusterer.java</span></div><h1>KMeansPlusPlusClusterer.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.math4.ml.clustering;
+
+import org.apache.commons.math4.exception.ConvergenceException;
+import org.apache.commons.math4.exception.NumberIsTooSmallException;
+import org.apache.commons.math4.exception.util.LocalizedFormats;
+import org.apache.commons.math4.ml.distance.DistanceMeasure;
+import org.apache.commons.math4.ml.distance.EuclideanDistance;
+import org.apache.commons.math4.stat.descriptive.moment.Variance;
+import org.apache.commons.math4.util.MathUtils;
+import org.apache.commons.rng.UniformRandomProvider;
+import org.apache.commons.rng.simple.RandomSource;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Clustering algorithm based on David Arthur and Sergei Vassilvitski k-means++ algorithm.
+ * @param &lt;T&gt; type of the points to cluster
+ * @see &lt;a href=&quot;http://en.wikipedia.org/wiki/K-means%2B%2B&quot;&gt;K-means++ (wikipedia)&lt;/a&gt;
+ * @since 3.2
+ */
+public class KMeansPlusPlusClusterer&lt;T extends Clusterable&gt; extends Clusterer&lt;T&gt; {
+
+    /** Strategies to use for replacing an empty cluster. */
+<span class="fc" id="L44">    public enum EmptyClusterStrategy {</span>
+
+        /** Split the cluster with largest distance variance. */
+<span class="fc" id="L47">        LARGEST_VARIANCE,</span>
+
+        /** Split the cluster with largest number of points. */
+<span class="fc" id="L50">        LARGEST_POINTS_NUMBER,</span>
+
+        /** Create a cluster around the point farthest from its centroid. */
+<span class="fc" id="L53">        FARTHEST_POINT,</span>
+
+        /** Generate an error. */
+<span class="fc" id="L56">        ERROR</span>
+
+    }
+
+    /** The number of clusters. */
+    private final int numberOfClusters;
+
+    /** The maximum number of iterations. */
+    private final int maxIterations;
+
+    /** Random generator for choosing initial centers. */
+    private final UniformRandomProvider random;
+
+    /** Selected strategy for empty clusters. */
+    private final EmptyClusterStrategy emptyStrategy;
+
+    /** Build a clusterer.
+     * &lt;p&gt;
+     * The default strategy for handling empty clusters that may appear during
+     * algorithm iterations is to split the cluster with largest distance variance.
+     * &lt;p&gt;
+     * The euclidean distance will be used as default distance measure.
+     *
+     * @param k the number of clusters to split the data into
+     */
+    public KMeansPlusPlusClusterer(final int k) {
+<span class="nc" id="L82">        this(k, -1);</span>
+<span class="nc" id="L83">    }</span>
+
+    /** Build a clusterer.
+     * &lt;p&gt;
+     * The default strategy for handling empty clusters that may appear during
+     * algorithm iterations is to split the cluster with largest distance variance.
+     * &lt;p&gt;
+     * The euclidean distance will be used as default distance measure.
+     *
+     * @param k the number of clusters to split the data into
+     * @param maxIterations the maximum number of iterations to run the algorithm for.
+     *   If negative, no maximum will be used.
+     */
+    public KMeansPlusPlusClusterer(final int k, final int maxIterations) {
+<span class="fc" id="L97">        this(k, maxIterations, new EuclideanDistance());</span>
+<span class="fc" id="L98">    }</span>
+
+    /** Build a clusterer.
+     * &lt;p&gt;
+     * The default strategy for handling empty clusters that may appear during
+     * algorithm iterations is to split the cluster with largest distance variance.
+     *
+     * @param k the number of clusters to split the data into
+     * @param maxIterations the maximum number of iterations to run the algorithm for.
+     *   If negative, no maximum will be used.
+     * @param measure the distance measure to use
+     */
+    public KMeansPlusPlusClusterer(final int k, final int maxIterations, final DistanceMeasure measure) {
+<span class="fc" id="L111">        this(k, maxIterations, measure, RandomSource.create(RandomSource.MT_64));</span>
+<span class="fc" id="L112">    }</span>
+
+    /** Build a clusterer.
+     * &lt;p&gt;
+     * The default strategy for handling empty clusters that may appear during
+     * algorithm iterations is to split the cluster with largest distance variance.
+     *
+     * @param k the number of clusters to split the data into
+     * @param maxIterations the maximum number of iterations to run the algorithm for.
+     *   If negative, no maximum will be used.
+     * @param measure the distance measure to use
+     * @param random random generator to use for choosing initial centers
+     */
+    public KMeansPlusPlusClusterer(final int k, final int maxIterations,
+                                   final DistanceMeasure measure,
+                                   final UniformRandomProvider random) {
+<span class="fc" id="L128">        this(k, maxIterations, measure, random, EmptyClusterStrategy.LARGEST_VARIANCE);</span>
+<span class="fc" id="L129">    }</span>
+
+    /** Build a clusterer.
+     *
+     * @param k the number of clusters to split the data into
+     * @param maxIterations the maximum number of iterations to run the algorithm for.
+     *   If negative, no maximum will be used.
+     * @param measure the distance measure to use
+     * @param random random generator to use for choosing initial centers
+     * @param emptyStrategy strategy to use for handling empty clusters that
+     * may appear during algorithm iterations
+     */
+    public KMeansPlusPlusClusterer(final int k, final int maxIterations,
+                                   final DistanceMeasure measure,
+                                   final UniformRandomProvider random,
+                                   final EmptyClusterStrategy emptyStrategy) {
+<span class="fc" id="L145">        super(measure);</span>
+<span class="fc" id="L146">        this.numberOfClusters = k;</span>
+<span class="fc" id="L147">        this.maxIterations = maxIterations;</span>
+<span class="fc" id="L148">        this.random        = random;</span>
+<span class="fc" id="L149">        this.emptyStrategy = emptyStrategy;</span>
+<span class="fc" id="L150">    }</span>
+
+    /**
+     * Return the number of clusters this instance will use.
+     * @return the number of clusters
+     */
+    public int getNumberOfClusters() {
+<span class="fc" id="L157">        return numberOfClusters;</span>
+    }
+
+    /**
+     * Returns the maximum number of iterations this instance will use.
+     * @return the maximum number of iterations, or -1 if no maximum is set
+     */
+    public int getMaxIterations() {
+<span class="fc" id="L165">        return maxIterations;</span>
+    }
+
+    /**
+     * Runs the K-means++ clustering algorithm.
+     *
+     * @param points the points to cluster
+     * @return a list of clusters containing the points
+     * @throws org.apache.commons.math4.exception.MathIllegalArgumentException
+     * if the data points are null or the number of clusters is larger than the
+     * number of data points
+     * @throws ConvergenceException if an empty cluster is encountered and the
+     * empty cluster strategy is set to {@link EmptyClusterStrategy#ERROR}
+     */
+    @Override
+    public List&lt;CentroidCluster&lt;T&gt;&gt; cluster(final Collection&lt;T&gt; points) {
+        // sanity checks
+<span class="fc" id="L182">        MathUtils.checkNotNull(points);</span>
+
+        // number of clusters has to be smaller or equal the number of data points
+<span class="fc bfc" id="L185" title="All 2 branches covered.">        if (points.size() &lt; numberOfClusters) {</span>
+<span class="fc" id="L186">            throw new NumberIsTooSmallException(points.size(), numberOfClusters, false);</span>
+        }
+
+        // create the initial clusters
+<span class="fc" id="L190">        List&lt;CentroidCluster&lt;T&gt;&gt; clusters = chooseInitialCenters(points);</span>
+
+        // create an array containing the latest assignment of a point to a cluster
+        // no need to initialize the array, as it will be filled with the first assignment
+<span class="fc" id="L194">        int[] assignments = new int[points.size()];</span>
+<span class="fc" id="L195">        assignPointsToClusters(clusters, points, assignments);</span>
+
+        // iterate through updating the centers until we're done
+<span class="fc bfc" id="L198" title="All 2 branches covered.">        final int max = (maxIterations &lt; 0) ? Integer.MAX_VALUE : maxIterations;</span>
+<span class="fc bfc" id="L199" title="All 2 branches covered.">        for (int count = 0; count &lt; max; count++) {</span>
+<span class="fc" id="L200">            boolean hasEmptyCluster = clusters.stream().anyMatch(cluster-&gt;cluster.getPoints().isEmpty());</span>
+<span class="fc" id="L201">            List&lt;CentroidCluster&lt;T&gt;&gt; newClusters = adjustClustersCenters(clusters);</span>
+<span class="fc" id="L202">            int changes = assignPointsToClusters(newClusters, points, assignments);</span>
+<span class="fc" id="L203">            clusters = newClusters;</span>
+
+            // if there were no more changes in the point-to-cluster assignment
+            // and there are no empty clusters left, return the current clusters
+<span class="pc bpc" id="L207" title="1 of 4 branches missed.">            if (changes == 0 &amp;&amp; !hasEmptyCluster) {</span>
+<span class="fc" id="L208">                return clusters;</span>
+            }
+        }
+<span class="fc" id="L211">        return clusters;</span>
+    }
+
+    /**
+     * @return the random generator
+     */
+    UniformRandomProvider getRandomGenerator() {
+<span class="fc" id="L218">        return random;</span>
+    }
+
+    /**
+     * @return the {@link EmptyClusterStrategy}
+     */
+    EmptyClusterStrategy getEmptyClusterStrategy() {
+<span class="nc" id="L225">        return emptyStrategy;</span>
+    }
+
+    /**
+     * Adjust the clusters's centers with means of points
+     * @param clusters the origin clusters
+     * @return adjusted clusters with center points
+     */
+    List&lt;CentroidCluster&lt;T&gt;&gt; adjustClustersCenters(List&lt;CentroidCluster&lt;T&gt;&gt; clusters) {
+<span class="fc" id="L234">        List&lt;CentroidCluster&lt;T&gt;&gt; newClusters = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L235" title="All 2 branches covered.">        for (final CentroidCluster&lt;T&gt; cluster : clusters) {</span>
+            final Clusterable newCenter;
+<span class="pc bpc" id="L237" title="1 of 2 branches missed.">            if (cluster.getPoints().isEmpty()) {</span>
+<span class="nc bnc" id="L238" title="All 4 branches missed.">                switch (emptyStrategy) {</span>
+                    case LARGEST_VARIANCE :
+<span class="nc" id="L240">                        newCenter = getPointFromLargestVarianceCluster(clusters);</span>
+<span class="nc" id="L241">                        break;</span>
+                    case LARGEST_POINTS_NUMBER :
+<span class="nc" id="L243">                        newCenter = getPointFromLargestNumberCluster(clusters);</span>
+<span class="nc" id="L244">                        break;</span>
+                    case FARTHEST_POINT :
+<span class="nc" id="L246">                        newCenter = getFarthestPoint(clusters);</span>
+<span class="nc" id="L247">                        break;</span>
+                    default :
+<span class="nc" id="L249">                        throw new ConvergenceException(LocalizedFormats.EMPTY_CLUSTER_IN_K_MEANS);</span>
+                }
+            } else {
+<span class="fc" id="L252">                newCenter = cluster.centroid();</span>
+            }
+<span class="fc" id="L254">            newClusters.add(new CentroidCluster&lt;&gt;(newCenter));</span>
+<span class="fc" id="L255">        }</span>
+<span class="fc" id="L256">        return newClusters;</span>
+    }
+
+    /**
+     * Adds the given points to the closest {@link Cluster}.
+     *
+     * @param clusters the {@link Cluster}s to add the points to
+     * @param points the points to add to the given {@link Cluster}s
+     * @param assignments points assignments to clusters
+     * @return the number of points assigned to different clusters as the iteration before
+     */
+    private int assignPointsToClusters(final List&lt;CentroidCluster&lt;T&gt;&gt; clusters,
+                                       final Collection&lt;T&gt; points,
+                                       final int[] assignments) {
+<span class="fc" id="L270">        int assignedDifferently = 0;</span>
+<span class="fc" id="L271">        int pointIndex = 0;</span>
+<span class="fc bfc" id="L272" title="All 2 branches covered.">        for (final T p : points) {</span>
+<span class="fc" id="L273">            int clusterIndex = getNearestCluster(clusters, p);</span>
+<span class="fc bfc" id="L274" title="All 2 branches covered.">            if (clusterIndex != assignments[pointIndex]) {</span>
+<span class="fc" id="L275">                assignedDifferently++;</span>
+            }
+
+<span class="fc" id="L278">            CentroidCluster&lt;T&gt; cluster = clusters.get(clusterIndex);</span>
+<span class="fc" id="L279">            cluster.addPoint(p);</span>
+<span class="fc" id="L280">            assignments[pointIndex++] = clusterIndex;</span>
+<span class="fc" id="L281">        }</span>
+
+<span class="fc" id="L283">        return assignedDifferently;</span>
+    }
+
+    /**
+     * Use K-means++ to choose the initial centers.
+     *
+     * @param points the points to choose the initial centers from
+     * @return the initial centers
+     */
+    List&lt;CentroidCluster&lt;T&gt;&gt; chooseInitialCenters(final Collection&lt;T&gt; points) {
+
+        // Convert to list for indexed access. Make it unmodifiable, since removal of items
+        // would screw up the logic of this method.
+<span class="fc" id="L296">        final List&lt;T&gt; pointList = Collections.unmodifiableList(new ArrayList&lt;&gt; (points));</span>
+
+        // The number of points in the list.
+<span class="fc" id="L299">        final int numPoints = pointList.size();</span>
+
+        // Set the corresponding element in this array to indicate when
+        // elements of pointList are no longer available.
+<span class="fc" id="L303">        final boolean[] taken = new boolean[numPoints];</span>
+
+        // The resulting list of initial centers.
+<span class="fc" id="L306">        final List&lt;CentroidCluster&lt;T&gt;&gt; resultSet = new ArrayList&lt;&gt;();</span>
+
+        // Choose one center uniformly at random from among the data points.
+<span class="fc" id="L309">        final int firstPointIndex = random.nextInt(numPoints);</span>
+
+<span class="fc" id="L311">        final T firstPoint = pointList.get(firstPointIndex);</span>
+
+<span class="fc" id="L313">        resultSet.add(new CentroidCluster&lt;T&gt;(firstPoint));</span>
+
+        // Must mark it as taken
+<span class="fc" id="L316">        taken[firstPointIndex] = true;</span>
+
+        // To keep track of the minimum distance squared of elements of
+        // pointList to elements of resultSet.
+<span class="fc" id="L320">        final double[] minDistSquared = new double[numPoints];</span>
+
+        // Initialize the elements.  Since the only point in resultSet is firstPoint,
+        // this is very easy.
+<span class="fc bfc" id="L324" title="All 2 branches covered.">        for (int i = 0; i &lt; numPoints; i++) {</span>
+<span class="fc bfc" id="L325" title="All 2 branches covered.">            if (i != firstPointIndex) { // That point isn't considered</span>
+<span class="fc" id="L326">                double d = distance(firstPoint, pointList.get(i));</span>
+<span class="fc" id="L327">                minDistSquared[i] = d*d;</span>
+            }
+        }
+
+<span class="fc bfc" id="L331" title="All 2 branches covered.">        while (resultSet.size() &lt; numberOfClusters) {</span>
+
+            // Sum up the squared distances for the points in pointList not
+            // already taken.
+<span class="fc" id="L335">            double distSqSum = 0.0;</span>
+
+<span class="fc bfc" id="L337" title="All 2 branches covered.">            for (int i = 0; i &lt; numPoints; i++) {</span>
+<span class="fc bfc" id="L338" title="All 2 branches covered.">                if (!taken[i]) {</span>
+<span class="fc" id="L339">                    distSqSum += minDistSquared[i];</span>
+                }
+            }
+
+            // Add one new data point as a center. Each point x is chosen with
+            // probability proportional to D(x)2
+<span class="fc" id="L345">            final double r = random.nextDouble() * distSqSum;</span>
+
+            // The index of the next point to be added to the resultSet.
+<span class="fc" id="L348">            int nextPointIndex = -1;</span>
+
+            // Sum through the squared min distances again, stopping when
+            // sum &gt;= r.
+<span class="fc" id="L352">            double sum = 0.0;</span>
+<span class="pc bpc" id="L353" title="1 of 2 branches missed.">            for (int i = 0; i &lt; numPoints; i++) {</span>
+<span class="fc bfc" id="L354" title="All 2 branches covered.">                if (!taken[i]) {</span>
+<span class="fc" id="L355">                    sum += minDistSquared[i];</span>
+<span class="fc bfc" id="L356" title="All 2 branches covered.">                    if (sum &gt;= r) {</span>
+<span class="fc" id="L357">                        nextPointIndex = i;</span>
+<span class="fc" id="L358">                        break;</span>
+                    }
+                }
+            }
+
+            // If it's not set to &gt;= 0, the point wasn't found in the previous
+            // for loop, probably because distances are extremely small.  Just pick
+            // the last available point.
+<span class="pc bpc" id="L366" title="1 of 2 branches missed.">            if (nextPointIndex == -1) {</span>
+<span class="nc bnc" id="L367" title="All 2 branches missed.">                for (int i = numPoints - 1; i &gt;= 0; i--) {</span>
+<span class="nc bnc" id="L368" title="All 2 branches missed.">                    if (!taken[i]) {</span>
+<span class="nc" id="L369">                        nextPointIndex = i;</span>
+<span class="nc" id="L370">                        break;</span>
+                    }
+                }
+            }
+
+            // We found one.
+<span class="pc bpc" id="L376" title="1 of 2 branches missed.">            if (nextPointIndex &gt;= 0) {</span>
+
+<span class="fc" id="L378">                final T p = pointList.get(nextPointIndex);</span>
+
+<span class="fc" id="L380">                resultSet.add(new CentroidCluster&lt;T&gt; (p));</span>
+
+                // Mark it as taken.
+<span class="fc" id="L383">                taken[nextPointIndex] = true;</span>
+
+<span class="fc bfc" id="L385" title="All 2 branches covered.">                if (resultSet.size() &lt; numberOfClusters) {</span>
+                    // Now update elements of minDistSquared.  We only have to compute
+                    // the distance to the new center to do this.
+<span class="fc bfc" id="L388" title="All 2 branches covered.">                    for (int j = 0; j &lt; numPoints; j++) {</span>
+                        // Only have to worry about the points still not taken.
+<span class="fc bfc" id="L390" title="All 2 branches covered.">                        if (!taken[j]) {</span>
+<span class="fc" id="L391">                            double d = distance(p, pointList.get(j));</span>
+<span class="fc" id="L392">                            double d2 = d * d;</span>
+<span class="fc bfc" id="L393" title="All 2 branches covered.">                            if (d2 &lt; minDistSquared[j]) {</span>
+<span class="fc" id="L394">                                minDistSquared[j] = d2;</span>
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                // None found --
+                // Break from the while loop to prevent
+                // an infinite loop.
+                break;
+            }
+<span class="fc" id="L406">        }</span>
+
+<span class="fc" id="L408">        return resultSet;</span>
+    }
+
+    /**
+     * Get a random point from the {@link Cluster} with the largest distance variance.
+     *
+     * @param clusters the {@link Cluster}s to search
+     * @return a random point from the selected cluster
+     * @throws ConvergenceException if clusters are all empty
+     */
+    private T getPointFromLargestVarianceCluster(final Collection&lt;CentroidCluster&lt;T&gt;&gt; clusters) {
+<span class="nc" id="L419">        double maxVariance = Double.NEGATIVE_INFINITY;</span>
+<span class="nc" id="L420">        Cluster&lt;T&gt; selected = null;</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">        for (final CentroidCluster&lt;T&gt; cluster : clusters) {</span>
+<span class="nc bnc" id="L422" title="All 2 branches missed.">            if (!cluster.getPoints().isEmpty()) {</span>
+
+                // compute the distance variance of the current cluster
+<span class="nc" id="L425">                final Clusterable center = cluster.getCenter();</span>
+<span class="nc" id="L426">                final Variance stat = new Variance();</span>
+<span class="nc bnc" id="L427" title="All 2 branches missed.">                for (final T point : cluster.getPoints()) {</span>
+<span class="nc" id="L428">                    stat.increment(distance(point, center));</span>
+<span class="nc" id="L429">                }</span>
+<span class="nc" id="L430">                final double variance = stat.getResult();</span>
+
+                // select the cluster with the largest variance
+<span class="nc bnc" id="L433" title="All 2 branches missed.">                if (variance &gt; maxVariance) {</span>
+<span class="nc" id="L434">                    maxVariance = variance;</span>
+<span class="nc" id="L435">                    selected = cluster;</span>
+                }
+
+            }
+<span class="nc" id="L439">        }</span>
+
+        // did we find at least one non-empty cluster ?
+<span class="nc bnc" id="L442" title="All 2 branches missed.">        if (selected == null) {</span>
+<span class="nc" id="L443">            throw new ConvergenceException(LocalizedFormats.EMPTY_CLUSTER_IN_K_MEANS);</span>
+        }
+
+        // extract a random point from the cluster
+<span class="nc" id="L447">        final List&lt;T&gt; selectedPoints = selected.getPoints();</span>
+<span class="nc" id="L448">        return selectedPoints.remove(random.nextInt(selectedPoints.size()));</span>
+
+    }
+
+    /**
+     * Get a random point from the {@link Cluster} with the largest number of points
+     *
+     * @param clusters the {@link Cluster}s to search
+     * @return a random point from the selected cluster
+     * @throws ConvergenceException if clusters are all empty
+     */
+    private T getPointFromLargestNumberCluster(final Collection&lt;? extends Cluster&lt;T&gt;&gt; clusters) {
+<span class="nc" id="L460">        int maxNumber = 0;</span>
+<span class="nc" id="L461">        Cluster&lt;T&gt; selected = null;</span>
+<span class="nc bnc" id="L462" title="All 2 branches missed.">        for (final Cluster&lt;T&gt; cluster : clusters) {</span>
+
+            // get the number of points of the current cluster
+<span class="nc" id="L465">            final int number = cluster.getPoints().size();</span>
+
+            // select the cluster with the largest number of points
+<span class="nc bnc" id="L468" title="All 2 branches missed.">            if (number &gt; maxNumber) {</span>
+<span class="nc" id="L469">                maxNumber = number;</span>
+<span class="nc" id="L470">                selected = cluster;</span>
+            }
+
+<span class="nc" id="L473">        }</span>
+
+        // did we find at least one non-empty cluster ?
+<span class="nc bnc" id="L476" title="All 2 branches missed.">        if (selected == null) {</span>
+<span class="nc" id="L477">            throw new ConvergenceException(LocalizedFormats.EMPTY_CLUSTER_IN_K_MEANS);</span>
+        }
+
+        // extract a random point from the cluster
+<span class="nc" id="L481">        final List&lt;T&gt; selectedPoints = selected.getPoints();</span>
+<span class="nc" id="L482">        return selectedPoints.remove(random.nextInt(selectedPoints.size()));</span>
+
+    }
+
+    /**
+     * Get the point farthest to its cluster center
+     *
+     * @param clusters the {@link Cluster}s to search
+     * @return point farthest to its cluster center
+     * @throws ConvergenceException if clusters are all empty
+     */
+    private T getFarthestPoint(final Collection&lt;CentroidCluster&lt;T&gt;&gt; clusters) {
+<span class="nc" id="L494">        double maxDistance = Double.NEGATIVE_INFINITY;</span>
+<span class="nc" id="L495">        Cluster&lt;T&gt; selectedCluster = null;</span>
+<span class="nc" id="L496">        int selectedPoint = -1;</span>
+<span class="nc bnc" id="L497" title="All 2 branches missed.">        for (final CentroidCluster&lt;T&gt; cluster : clusters) {</span>
+
+            // get the farthest point
+<span class="nc" id="L500">            final Clusterable center = cluster.getCenter();</span>
+<span class="nc" id="L501">            final List&lt;T&gt; points = cluster.getPoints();</span>
+<span class="nc bnc" id="L502" title="All 2 branches missed.">            for (int i = 0; i &lt; points.size(); ++i) {</span>
+<span class="nc" id="L503">                final double distance = distance(points.get(i), center);</span>
+<span class="nc bnc" id="L504" title="All 2 branches missed.">                if (distance &gt; maxDistance) {</span>
+<span class="nc" id="L505">                    maxDistance     = distance;</span>
+<span class="nc" id="L506">                    selectedCluster = cluster;</span>
+<span class="nc" id="L507">                    selectedPoint   = i;</span>
+                }
+            }
+
+<span class="nc" id="L511">        }</span>
+
+        // did we find at least one non-empty cluster ?
+<span class="nc bnc" id="L514" title="All 2 branches missed.">        if (selectedCluster == null) {</span>
+<span class="nc" id="L515">            throw new ConvergenceException(LocalizedFormats.EMPTY_CLUSTER_IN_K_MEANS);</span>
+        }
+
+<span class="nc" id="L518">        return selectedCluster.getPoints().remove(selectedPoint);</span>
+
+    }
+
+    /**
+     * Returns the nearest {@link Cluster} to the given point
+     *
+     * @param clusters the {@link Cluster}s to search
+     * @param point the point to find the nearest {@link Cluster} for
+     * @return the index of the nearest {@link Cluster} to the given point
+     */
+    private int getNearestCluster(final Collection&lt;CentroidCluster&lt;T&gt;&gt; clusters, final T point) {
+<span class="fc" id="L530">        double minDistance = Double.MAX_VALUE;</span>
+<span class="fc" id="L531">        int clusterIndex = 0;</span>
+<span class="fc" id="L532">        int minCluster = 0;</span>
+<span class="fc bfc" id="L533" title="All 2 branches covered.">        for (final CentroidCluster&lt;T&gt; c : clusters) {</span>
+<span class="fc" id="L534">            final double distance = distance(point, c.getCenter());</span>
+<span class="fc bfc" id="L535" title="All 2 branches covered.">            if (distance &lt; minDistance) {</span>
+<span class="fc" id="L536">                minDistance = distance;</span>
+<span class="fc" id="L537">                minCluster = clusterIndex;</span>
+            }
+<span class="fc" id="L539">            clusterIndex++;</span>
+<span class="fc" id="L540">        }</span>
+<span class="fc" id="L541">        return minCluster;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.5.201910111838</span></div></body></html>
