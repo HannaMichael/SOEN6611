@@ -2,7 +2,6 @@
     <pitest.version>1.4.10</pitest.version>
   </properties>
 
-
 <plugin>
         <groupId>org.pitest</groupId>
         <artifactId>pitest-maven</artifactId>
@@ -16,4 +15,15 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <skip>false</skip>
+          <reportsDirectory>${project.build.directory}/pit-custom-output-dir</reportsDirectory>
+          <sourceDataFormats>
+            <sourceDataFormat>HTML</sourceDataFormat>
+          </sourceDataFormats>
+          <siteReportName>my-pit-report-name</siteReportName>
+          <siteReportDescription>my pit report custom description</siteReportDescription>
+          <siteReportDirectory>pit-custom-site-directory</siteReportDirectory>
+        </configuration>
+
       </plugin>
