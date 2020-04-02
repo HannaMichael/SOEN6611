@@ -19,8 +19,8 @@ Calculation for M5 and M6
 Correlation Analysis
 
 <h1> Requirements </h1>
-JDK 1.8 or higher
-Maven 3.6.3
+- JDK 1.8 or higher <br>
+- Maven 3.6.3
 
 <h1> Team : Group B </h1>
   
