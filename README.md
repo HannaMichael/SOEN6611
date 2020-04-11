@@ -13,26 +13,26 @@
 
 <h3>	4. Raw Data</h3>  
 
-- 1. Commons Collections : Data generated from code coverage tool (html and csv format). <br>    
-- 2. Commons Cli  : Data generated from code coverage tool (html and csv format). <br>    
-- 3. Commons Configuration : Data generated from code coverage tool (html and csv format).  <br>    
-- 4. Commons Math: Data generated from code coverage tool (html and csv format).  <br>   
+- Commons Collections : Data generated from code coverage tool (html and csv format). <br>    
+- Commons Cli  : Data generated from code coverage tool (html and csv format). <br>    
+- Commons Configuration : Data generated from code coverage tool (html and csv format).  <br>    
+- Commons Math: Data generated from code coverage tool (html and csv format).  <br>   
 
 <h3>	5. Analysis</h3>
 
-- Corelation Analysis  : Correction analysis for all Metrics
-        - Metric 1, 2 ,3, 4 and 6
-        - Metric 5 and Metric 6
-- Documents  : includes all the documents e.g. final paper, perposal..
-        - Cover letter and Report (Group B).pdf
-        - SOEN 6611 Proposal.pdf
+- Corelation Analysis  : Correction analysis for all Metrics <br> 
+        - Metric 1, 2 ,3, 4 and 6 <br> 
+        - Metric 5 and Metric 6 <br> 
+- Documents  : includes all the documents e.g. final paper, perposal.. <br> 
+        - Cover letter and Report (Group B).pdf <br> 
+        - SOEN 6611 Proposal.pdf <br> 
 
 <h3>    6. POM Files</h3>
 
-- 1. Commons Collections : Includes POM file. <br>    
-- 2. Commons Cli  : Includes POM file. <br>    
-- 3. Commons Configuration : Includes POM file.  <br>    
-- 4. Commons Math: Includes POM file.  <br>   
+- Commons Collections : Includes POM file. <br>    
+- Commons Cli  : Includes POM file. <br>    
+- Commons Configuration : Includes POM file.  <br>    
+- Commons Math: Includes POM file.  <br>   
 
 <h1> Requirements </h1>
 - JDK 1.8 or higher <br>
@@ -41,8 +41,8 @@
 <h1> Team : Group B </h1>
   
 <h2> Members </h2>
-1. Michael Hanna
-2. Ali Zafar Iqbal
-3. Mahshad Saghaleini
-4. Arjun singh Thakur
-5. Han Gao
+1. Michael Hanna<br>
+2. Ali Zafar Iqbal<br>  
+3. Mahshad Saghaleini<br>  
+4. Arjun singh Thakur<br> 
+5. Han Gao<br>
