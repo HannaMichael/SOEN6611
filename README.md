@@ -22,12 +22,12 @@
 - JDK 1.8 or higher <br>
 - Maven 3.6.3
 
+
 <h1> Team : Group B </h1>
   
 <h2> Members </h2>
-
-1. Michael Hanna
-2. Ali Zafar Iqbal
+1. Ali Zafar Iqbal 
+2. Michael Hanna
 3. Mahshad Saghaleini
 4. Arjun singh Thakur
 5. Han Gao
